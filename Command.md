@@ -1,43 +1,34 @@
-# COMMANDS.md — LR (Live Reload) Full Command Reference
+SIMPLE COMMANDS (SHORT VERSION)
+📦 Install
+pkg install nodejs git -y
 
-This document lists **all commands** used to run, manage, debug, extend, and deploy the LR server framework.
-
-LR = Custom Live Reload Server  
-Platform = Termux, Linux, Android, VPS, Local PC  
-Author = You  
-
----
-
-# 📦 1. Installation
-
-## Install Node.js (Termux)
-```bash
-pkg install nodejs -y
-```
-Install Git
-```bash
-pkg install git -y
-
-```
-Clone LR project
-```bash
-git clone https://github.com/ratetanginamo/LIVE_RELOAD.git
+git clone https://github.com/ratetanginamo/LIve_RELOAD.git
 cd LIVE_RELOAD
+npm install
+
+🚀 Run Server
+node bin/lr.js public
+
+⚡ Restart Server
+```bash
+pkill node
+node bin/lr.js public
 ```
-🚀 2. Running the Server
-Start LR server (default)
+🗂 Move Files
+```bash
+mv index.html public/
+mv style.css public/
+mv script.js public/
+```
+🧩 Create Module
+```bash
+nano lr_pkg/modules/moduleX.js
+```
+🔥 Reload Modules
 ```bash
 node bin/lr.js public
 ```
-Start with custom port
+🧹 Clean
 ```bash
-node bin/lr.js public --port 5000
-```
-Start using shell script
-```bash
-./start.sh
-```
-Start server in background (Termux)
-``
-nohup node bin/lr.js public &
-``
+pkill node
+npm cache clean --force
