@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nano LR Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Welcome to Nano LR Dashboard</h1>
+    <p>Edit files in this folder and watch the browser auto-reload!</p>
+    
+    <div id="log"></div>
+
+    <script src="script.js"></script>
+
+    <!-- Auto-inject WebSocket client for LR -->
+    <script>
+        const ws = new WebSocket('ws://localhost:3000');
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'reload') {
+                console.log('[LR] Reloading due to file change:', msg.file);
+                window.location.reload();
+            }
+            if (msg.type === 'module12') {
+                const log = document.getElementById('log');
+                log.innerHTML += `<p>[Module12] File changed: ${msg.file}</p>`;
+            }
+        };
+        ws.onopen = () => console.log('[LR] WebSocket connected');
+        ws.onclose = () => console.log('[LR] WebSocket disconnected');
+    </script>
+</body>
+  </html>
+  
