@@ -1,76 +1,91 @@
-#!/usr/bin/env node
+// lr.js - Nano LR fully working HTTP + WebSocket server
+
 const http = require('http');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 const WebSocket = require('ws');
 
-const PORT = 3000;
-const WS_PORT = 8080;
-const PROJECT_ARG = process.argv[2] ? process.argv[2] : '..';
-const PROJECT_PATH = path.resolve(__dirname, PROJECT_ARG);
-const MODULES_PATH = path.join(__dirname, '../modules');
+// Project folder
+const projectFolder = process.argv[2] || path.join(__dirname, '../dashboard');
+console.log(`[LR] Serving project folder: ${projectFolder}`);
 
-console.log('[LR] starting. project:', PROJECT_PATH);
+// -------- Load Modules --------
+const modulesDir = path.join(__dirname, '../modules');
+const modules = {};
 
-// Load modules
-let modules = [];
-if (fs.existsSync(MODULES_PATH)) {
-  fs.readdirSync(MODULES_PATH).forEach(file => {
-    if (!file.endsWith('.js')) return;
-    try {
-      const mod = require(path.join(MODULES_PATH, file));
-      modules.push(mod);
-      if (typeof mod.init === 'function') mod.init();
-      console.log('[LR] loaded module:', file);
-    } catch (err) {
-      console.error('[LR] failed to load module', file, err.message);
-    }
-  });
+if (fs.existsSync(modulesDir)) {
+    fs.readdirSync(modulesDir).forEach(file => {
+        if (file.endsWith('.js')) {
+            try {
+                const mod = require(path.join(modulesDir, file));
+                modules[file] = mod;
+                console.log(`[LR] Loaded module: ${file}`);
+            } catch (e) {
+                console.error(`[LR] Error loading ${file}:`, e.message);
+            }
+        }
+    });
+} else {
+    console.warn('[LR] Modules folder not found:', modulesDir);
 }
 
-// WebSocket server for LR client (used only if needed)
-const wsServer = new WebSocket.Server({ port: WS_PORT });
-wsServer.on('connection', socket => console.log('[LR] browser connected (ws)'));
-
-// Watch files
-fs.watch(PROJECT_PATH, { recursive: true }, (evt, filename) => {
-  if (!filename) return;
-  console.log('[LR] change:', filename);
-  modules.forEach(m => { if (typeof m.onFileChange === 'function') m.onFileChange(PROJECT_PATH, filename); });
-  wsServer.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send('reload'); });
-});
-
-// HTTP server serving PROJECT_PATH and auto-injecting client for HTML
+// -------- HTTP Server --------
 const server = http.createServer((req, res) => {
-  let reqPath = req.url.split('?')[0];
-  if (reqPath === '/') reqPath = '/index.html';
-  const filePath = path.join(PROJECT_PATH, reqPath);
-  fs.readFile(filePath, 'utf8', (err, data) => {
-    if (err) {
-      res.writeHead(404, {'Content-Type':'text/plain'}); res.end('Not Found');
-      return;
-    }
-    if (filePath.endsWith('.html')) {
-      const injected = data.replace(/<\/body>/i, `<script>
-      (function(){
-        const ws = new WebSocket('ws://localhost:${WS_PORT}');
-        ws.onmessage = function(e){ if(e.data==='reload') location.reload(); };
-      })();
-      </script></body>`);
-      res.writeHead(200, {'Content-Type':'text/html'}); res.end(injected);
-    } else {
-      // try to detect content type
-      const ext = path.extname(filePath).toLowerCase();
-      const map = {'.css':'text/css','.js':'application/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml'};
-      const type = map[ext] || 'text/plain';
-      res.writeHead(200, {'Content-Type': type});
-      // send raw file chunk for binary too
-      if (['.png','.jpg','.svg'].includes(ext)) {
-        fs.readFile(filePath, (err2, buf) => { if (err2) { res.writeHead(500); res.end('Error'); } else res.end(buf); });
-      } else res.end(data);
-    }
-  });
+    let filePath = path.join(projectFolder, req.url === '/' ? 'index.html' : req.url);
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+        '.html': 'text/html',
+        '.js': 'application/javascript',
+        '.css': 'text/css',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.json': 'application/json'
+    };
+
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(404);
+            res.end('404 Not Found');
+        } else {
+            res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
+            res.end(content);
+        }
+    });
 });
 
-server.listen(PORT, () => console.log(`[LR] HTTP server running at http://localhost:${PORT}`));
-  
+server.listen(3000, () => console.log('[LR] HTTP Server running at http://localhost:3000/'));
+
+// -------- WebSocket Server for Live Reload --------
+const wss = new WebSocket.Server({ server });
+wss.on('connection', ws => console.log('[LR] WebSocket client connected'));
+
+// Broadcast reload to all clients
+function broadcastReload(file) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'reload', file }));
+        }
+    });
+}
+
+// Initialize modules that need WS access
+if (modules['module12.js'] && modules['module12.js'].init) {
+    modules['module12.js'].init(wss);
+}
+
+// -------- Watch Project Folder --------
+fs.watch(projectFolder, { recursive: true }, (eventType, filename) => {
+    if (filename) {
+        console.log(`[LR] File changed: ${filename}`);
+        broadcastReload(filename);
+
+        // Notify modules
+        Object.values(modules).forEach(mod => {
+            if (mod.onFileChange) mod.onFileChange(filename);
+        });
+    }
+});
+                             
