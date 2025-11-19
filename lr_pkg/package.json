@@ -1,0 +1,13 @@
+{
+  "name": "lr_pkg",
+  "version": "1.0.0",
+  "description": "Local Nano LR package (standard)",
+  "bin": {
+    "lr": "bin/lr.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0",
+    "jsdom": "^22.1.0",
+    "css": "^3.0.0"
+  }
+}
